@@ -444,6 +444,7 @@ test("consented voice preview and sentence-streamed delegate audio complete with
     .click();
   await page.getByLabel("Exact model ID").fill("test-model");
   await page.getByLabel("The interviewer knows", { exact: false }).check();
+  await page.getByLabel("Answer output", { exact: true }).selectOption("audio");
   await page
     .getByLabel("Speak answers automatically", { exact: false })
     .check();
@@ -459,4 +460,180 @@ test("consented voice preview and sentence-streamed delegate audio complete with
       .filter({ hasText: "First audible playback" })
       .locator("dd"),
   ).toHaveText(/\d+ ms/);
+});
+
+test("video replica receives real WebRTC test-pattern frames and routes delegate speech to the local engine", async ({
+  page,
+}) => {
+  test.setTimeout(45000);
+  await mockDesktop(page);
+  await page.goto("/");
+  await profile(page);
+  const iceCandidates = await page.evaluate(async () => {
+    const probe = new RTCPeerConnection({ iceServers: [] });
+    probe.addTransceiver("video", { direction: "recvonly" });
+    await probe.setLocalDescription(await probe.createOffer());
+    if (probe.iceGatheringState !== "complete")
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, 7000);
+        probe.addEventListener("icegatheringstatechange", () => {
+          if (probe.iceGatheringState === "complete") {
+            clearTimeout(timer);
+            resolve();
+          }
+        });
+      });
+    const count = probe
+      .localDescription!.sdp.split("\n")
+      .filter((line) => line.startsWith("a=candidate:")).length;
+    probe.close();
+    return count;
+  });
+  test.skip(
+    iceCandidates === 0,
+    "This execution browser exposes zero ICE candidates. Real media transport must be tested in a WebRTC-capable runtime; no transport readiness is claimed here.",
+  );
+  await page.evaluate(() => {
+    const api = window.interview!;
+    let remote: RTCPeerConnection | null = null;
+    let frameTimer: ReturnType<typeof setInterval> | null = null;
+    let source: MediaStream | null = null;
+    let audio: AudioContext | null = null;
+    api.avatarStatus = async () => ({
+      configured: true,
+      avatars: ["aaron"],
+      session_active: false,
+      profile: "test fixture",
+      video_runtime: "simulated control plane; no GPU inference",
+      message: "Test renderer configured.",
+    });
+    api.avatarOffer = async (_id, sdp) => {
+      remote = new RTCPeerConnection({ iceServers: [] });
+      const canvas = document.createElement("canvas");
+      canvas.width = 320;
+      canvas.height = 240;
+      const context = canvas.getContext("2d")!;
+      let frame = 0;
+      frameTimer = setInterval(() => {
+        context.fillStyle = frame++ % 2 ? "#31533d" : "#42694b";
+        context.fillRect(0, 0, 320, 240);
+        context.fillStyle = "#e2eed3";
+        context.font = "16px sans-serif";
+        context.fillText("SYNTHETIC TRANSPORT TEST", 20, 110);
+      }, 100);
+      source = canvas.captureStream(10);
+      audio = new AudioContext();
+      const oscillator = audio.createOscillator();
+      const gain = audio.createGain();
+      gain.gain.value = 0;
+      const destination = audio.createMediaStreamDestination();
+      oscillator.connect(gain);
+      gain.connect(destination);
+      oscillator.start();
+      await audio.resume();
+      for (const track of [
+        ...source.getTracks(),
+        ...destination.stream.getTracks(),
+      ])
+        remote.addTrack(track);
+      await remote.setRemoteDescription({ type: "offer", sdp });
+      await remote.setLocalDescription(await remote.createAnswer());
+      if (remote.iceGatheringState !== "complete")
+        await new Promise<void>((resolve) => {
+          remote!.addEventListener("icegatheringstatechange", () => {
+            if (remote!.iceGatheringState === "complete") resolve();
+          });
+        });
+      return {
+        type: "answer",
+        sdp: remote.localDescription!.sdp,
+        sessionid: "synthetic-session",
+      };
+    };
+    api.avatarSpeak = async (request) => {
+      const state = window as unknown as { localSpeech: unknown[] };
+      state.localSpeech ||= [];
+      state.localSpeech.push(request);
+      return { startedMs: 90 };
+    };
+    api.avatarInterrupt = async () => {};
+    api.avatarStop = async () => {
+      remote?.close();
+      source?.getTracks().forEach((track) => track.stop());
+      if (frameTimer) clearInterval(frameTimer);
+      await audio?.close();
+    };
+  });
+  await page
+    .getByRole("button", { name: "Video replica", exact: false })
+    .click();
+  await page.getByRole("button", { name: "Check engine", exact: true }).click();
+  await page
+    .getByLabel("The video and voice are mine", { exact: false })
+    .check();
+  await page.getByRole("button", { name: "Start my video replica" }).click();
+  await expect(
+    page.locator(".replica-preview-card .replica-live-state"),
+  ).toContainText("Receiving real video frames", { timeout: 25000 });
+  expect(
+    await page
+      .locator(".replica-preview-card video")
+      .evaluate((element) => (element as HTMLVideoElement).videoWidth),
+  ).toBe(320);
+  await page
+    .getByRole("button", { name: "Interview delegate", exact: true })
+    .click();
+  await page.getByLabel("Exact model ID").fill("test-model");
+  await page.getByLabel("The interviewer knows", { exact: false }).check();
+  await page
+    .getByLabel("Speak answers automatically", { exact: false })
+    .check();
+  await page.getByLabel("Interviewer’s question").fill("What did Alex build?");
+  await page.getByRole("button", { name: "Answer on my behalf" }).click();
+  await expect(
+    page.getByText("Alex built an accessible logistics dashboard", {
+      exact: false,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Answer on my behalf" }),
+  ).toBeVisible();
+  const speech = await page.evaluate(
+    () =>
+      (window as unknown as { localSpeech: { mode: string; text: string }[] })
+        .localSpeech,
+  );
+  expect(speech.length).toBeGreaterThan(0);
+  expect(speech.every((entry) => entry.mode === "local")).toBe(true);
+  await page
+    .getByRole("button", { name: "Video replica", exact: false })
+    .click();
+  await page.getByRole("button", { name: "Disconnect video" }).click();
+  await expect(
+    page.locator(".replica-preview-card .replica-live-state"),
+  ).toContainText("Not connected");
+});
+
+test("video setup reports a missing local runtime without displaying a stock person", async ({
+  page,
+}) => {
+  await mockDesktop(page);
+  await page.goto("/");
+  await page.evaluate(() => {
+    window.interview!.avatarStatus = async () => {
+      throw new Error("Local engine is not running on 127.0.0.1:17860.");
+    };
+  });
+  await page
+    .getByRole("button", { name: "Video replica", exact: false })
+    .click();
+  await page.getByRole("button", { name: "Check engine", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("not running");
+  await expect(
+    page.getByRole("button", { name: "Start my video replica" }),
+  ).toBeDisabled();
+  await expect(
+    page.locator(".replica-preview-card .replica-live-state"),
+  ).toHaveText("Not connected");
+  await expect(page.locator(".replica-preview-card img")).toHaveCount(0);
 });

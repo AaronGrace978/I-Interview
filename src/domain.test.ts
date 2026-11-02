@@ -4,10 +4,19 @@ import {
   feedbackSchema,
   practiceFeedback,
   profileSchema,
+  speechChunks,
 } from "./domain";
 import { requestSchema } from "./contracts";
 
 describe("interview data boundaries", () => {
+  it("bounds long utterances without dropping words or splitting surrogate pairs", () => {
+    const text = `${"A concrete achievement with evidence. ".repeat(140)}🧑‍💻`;
+    const chunks = speechChunks(text);
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.every((chunk) => chunk.length <= 1500)).toBe(true);
+    expect(chunks.join(" ").split(/\s+/)).toEqual(text.trim().split(/\s+/));
+    expect(speechChunks("")).toEqual([]);
+  });
   it("rejects resumes and answers beyond the IPC limits", () => {
     expect(
       profileSchema.safeParse({

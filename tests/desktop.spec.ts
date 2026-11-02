@@ -65,6 +65,7 @@ test("packaged renderer runs in sandboxed Electron with validated IPC and no ren
     );
     expect(Object.keys(status).sort()).toEqual([
       "anthropic",
+      "avatar_engine",
       "elevenlabs",
       "ollama",
       "openai",

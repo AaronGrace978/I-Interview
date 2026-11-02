@@ -2,12 +2,14 @@
 
 An Electron desktop application for **disclosed AI interview representation**. Your delegate answers on your behalf from your resume and approved facts. Interview practice is a separate, optional mode.
 
-This is an initial implementation, not a production-certified release. External interview-service integrations, animated avatars, signed distribution, and live provider validation remain release prerequisites where applicable. It does not secretly impersonate a person, join third-party calls, or install virtual camera/audio drivers.
+The self-hosted **Video replica** path now targets an RTX 5060 Ti 16 GB / Ryzen 7 3700X / 32 GB RAM workstation. It connects a MuseTalk-based local GPU renderer over WebRTC and supports local Chatterbox voice synthesis or ElevenLabs audio. See [the workstation setup and current validation limits](avatar-engine/README.md). Actual GPU inference and the user's likeness still require testing with their footage on that machine; a static portrait or generated illustration is not presented as completed video functionality.
+
+This is an initial implementation, not a production-certified release. External interview-service integrations, target-GPU avatar validation, signed distribution, and live provider validation remain release prerequisites where applicable. It does not secretly impersonate a person, join third-party calls, or install virtual camera/audio drivers.
 
 ## What works
 
 - Local PDF/TXT/Markdown resume extraction and review (10 MB, 15 PDF pages, 24,000 characters). Image-only PDFs require pasted text; OCR is not included.
-- Local portrait import. The portrait is static, not a generated video or lip-synced avatar.
+- Local portrait import for identity setup, plus a separate self-hosted video-replica setup and receive-only WebRTC stage. The image preview stays static; moving video must come from the user's prepared GPU renderer.
 - Primary AI delegate room: interviewer questions, streamed answers grounded by instructions in approved facts, cancellation, conversation history, and JSON transcript export. Instructions reduce hallucinations but do not guarantee factual accuracy; supervise responses.
 - OpenAI, Anthropic, OpenRouter, xAI, and Ollama Cloud adapters. Model catalogs are fetched live, with exact-ID entry for new models. Catalog availability does not mean every model supports text chat, tool use, or this request format. No automatic cross-provider fallback or claims that every newly released model is validated.
 - Visible microphone recording with speaker consent, bounded to 60 seconds. OpenAI transcription fills a reviewable question; submitting the question is an explicit action. Answer generation can use any supported provider independently.
@@ -48,7 +50,7 @@ Keep TLS and checksum verification enabled. No Rust or Tauri prerequisites are r
 6. Select **Answer on my behalf**. Turn on automatic speech if you want answers read in your consented voice. **Stop now** cancels generation and speech. Failed or interrupted model responses are not committed to conversation history.
 7. Export the session before closing. A conversation is limited to 19 turns to bound context and costs. Start a fresh interview to change the model or approved facts.
 
-The delegate identifies itself as an AI representative and speaks about the candidate in the third person. It is a supervised representative, not a hidden answer feed.
+The delegate identifies itself as an AI representative and uses the candidate’s approved experience in the first person while identifying itself as an AI replica when asked. It is a supervised representative, not a hidden answer feed.
 
 ## Data and networking
 

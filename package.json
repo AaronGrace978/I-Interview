@@ -1,7 +1,7 @@
 {
   "name": "i-interview",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0-dev.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -16,7 +16,8 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.electron.json",
     "test:desktop": "playwright test --config playwright.desktop.config.ts",
     "format": "prettier --write src electron tests scripts *.ts *.json .github/workflows/*.yml README.md SECURITY.md",
-    "format:check": "prettier --check src electron tests scripts *.ts *.json .github/workflows/*.yml README.md SECURITY.md"
+    "format:check": "prettier --check src electron tests scripts *.ts *.json .github/workflows/*.yml README.md SECURITY.md",
+    "test:avatar": "uv run --directory avatar-engine --frozen --group dev python -m pytest tests"
   },
   "dependencies": {
     "electron-updater": "^6.8.11",
@@ -94,8 +95,11 @@
       "target": [
         "AppImage"
       ],
-      "category": "Office"
+      "category": "Office",
+      "syncDesktopName": true
     },
-    "icon": "build/icon.png"
-  }
+    "icon": "build/icon.png",
+    "artifactName": "${name}-${version}-${os}-${arch}.${ext}"
+  },
+  "desktopName": "i-interview.desktop"
 }

@@ -9,6 +9,17 @@ const subscribe = <T,>(channel: string, callback: (data: T) => void) => {
   };
 };
 const bridge: DesktopBridge = {
+  avatarStatus: () => ipcRenderer.invoke("avatar:status"),
+  avatarGpu: () => ipcRenderer.invoke("avatar:gpu"),
+  avatarPrepare: (avatarId, consent) =>
+    ipcRenderer.invoke("avatar:prepare", { avatarId, consent }),
+  avatarJob: (id) => ipcRenderer.invoke("avatar:job", id),
+  avatarImportVoice: (consent) => ipcRenderer.invoke("avatar:voice", consent),
+  avatarOffer: (avatarId, sdp, consent) =>
+    ipcRenderer.invoke("avatar:offer", { avatarId, sdp, consent }),
+  avatarSpeak: (request) => ipcRenderer.invoke("avatar:speak", request),
+  avatarInterrupt: () => ipcRenderer.invoke("avatar:interrupt"),
+  avatarStop: () => ipcRenderer.invoke("avatar:stop"),
   credentialStatus: () => ipcRenderer.invoke("credentials:status"),
   saveCredential: (provider, key) =>
     ipcRenderer.invoke("credentials:save", { provider, key }),

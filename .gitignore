@@ -9,3 +9,7 @@ release/
 .env*
 !.env.example
 *.log
+**/__pycache__/
+**/.pytest_cache/
+avatar-engine/.venv/
+avatar-engine/.ruff_cache/

@@ -6,11 +6,22 @@ import {
   net,
   session,
   protocol,
+  dialog,
 } from "electron";
 import updater from "electron-updater";
 import { join, dirname, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readFile,
+  rename,
+  unlink,
+  writeFile,
+  stat,
+} from "node:fs/promises";
+import { basename, extname } from "node:path";
+import { LocalAvatarClient } from "./avatar.js";
+import { avatarIdSchema, avatarSpeechSchema } from "../src/avatar-contracts.js";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -58,6 +69,39 @@ const voiceIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const credentialDir = () => join(app.getPath("userData"), "credentials");
 const credentialPath = (provider: KeyProvider) =>
   join(credentialDir(), `${provider}.enc`);
+const avatar = new LocalAvatarClient(
+  () => getKey("avatar_engine"),
+  async (id, text, signal) => {
+    const key = await getKey("elevenlabs");
+    const response = await checkedFetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceIdSchema.parse(id)}/stream?output_format=mp3_44100_128`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "xi-api-key": key },
+        body: JSON.stringify({ text, model_id: "eleven_flash_v2_5" }),
+        signal: AbortSignal.any([signal, AbortSignal.timeout(60000)]),
+      },
+    );
+    if (!response.body)
+      throw new Error("The voice provider returned no audio.");
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let bytes = 0;
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        bytes += value.length;
+        if (bytes > 12 * 1024 * 1024)
+          throw new Error("Voice audio exceeds the size limit.");
+        chunks.push(value);
+      }
+    } finally {
+      await reader.cancel().catch(() => {});
+    }
+    return new Uint8Array(Buffer.concat(chunks));
+  },
+);
 function safeEncryption() {
   if (
     !safeStorage.isEncryptionAvailable() ||
@@ -269,6 +313,75 @@ async function streamGeneration(input: unknown) {
   }
 }
 function registerHandlers() {
+  handle("avatar:status", () => avatar.status());
+  handle("avatar:gpu", () => avatar.gpu());
+  handle("avatar:job", (input) => avatar.job(z.string().uuid().parse(input)));
+  handle("avatar:offer", (input) => {
+    const request = z
+      .object({
+        avatarId: avatarIdSchema,
+        sdp: z.string().min(10).max(150000),
+        consent: z.literal(true),
+      })
+      .parse(input);
+    return avatar.offer(request.avatarId, request.sdp);
+  });
+  handle("avatar:speak", (input) =>
+    avatar.speak(avatarSpeechSchema.parse(input)),
+  );
+  handle("avatar:interrupt", () => avatar.interrupt());
+  handle("avatar:stop", () => avatar.stop());
+  handle("avatar:prepare", async (input) => {
+    const { avatarId } = z
+      .object({ avatarId: avatarIdSchema, consent: z.literal(true) })
+      .parse(input);
+    const selected = await dialog.showOpenDialog(window!, {
+      title: "Select your own reference footage",
+      properties: ["openFile"],
+      filters: [
+        { name: "Reference video", extensions: ["mp4", "mov", "mkv", "webm"] },
+      ],
+    });
+    if (selected.canceled || !selected.filePaths[0]) return null;
+    const file = selected.filePaths[0];
+    const metadata = await stat(file);
+    if (
+      !metadata.isFile() ||
+      metadata.size > 150 * 1024 * 1024 ||
+      ![".mp4", ".mov", ".mkv", ".webm"].includes(extname(file).toLowerCase())
+    )
+      throw new Error(
+        "Select a supported reference video smaller than 150 MB.",
+      );
+    return avatar.prepare(
+      avatarId,
+      new Uint8Array(await readFile(file)),
+      basename(file),
+    );
+  });
+  handle("avatar:voice", async (input) => {
+    z.literal(true).parse(input);
+    const selected = await dialog.showOpenDialog(window!, {
+      title: "Select a clean recording of your own voice",
+      properties: ["openFile"],
+      filters: [
+        {
+          name: "Voice reference",
+          extensions: ["wav", "mp3", "m4a", "ogg", "flac"],
+        },
+      ],
+    });
+    if (selected.canceled || !selected.filePaths[0]) return false;
+    const file = selected.filePaths[0];
+    const metadata = await stat(file);
+    if (!metadata.isFile() || metadata.size > 10 * 1024 * 1024)
+      throw new Error("Select a voice sample smaller than 10 MB.");
+    await avatar.importVoice(
+      new Uint8Array(await readFile(file)),
+      basename(file),
+    );
+    return true;
+  });
   handle("credentials:status", async () => {
     const status: Partial<Record<KeyProvider, boolean>> = {};
     for (const provider of keyProviderSchema.options) {
@@ -608,6 +721,7 @@ async function createWindow() {
   window.on("closed", () => {
     generation?.controller.abort();
     speechController?.abort();
+    void avatar.stop().catch(() => {});
     window = null;
   });
   if (dev) await window.loadURL("http://127.0.0.1:1420");

@@ -8,7 +8,7 @@ import {
   Square,
   Volume2,
 } from "lucide-react";
-import type { Profile, Message } from "./domain";
+import { speechChunks, type Profile, type Message } from "./domain";
 import {
   desktop,
   generateText,
@@ -18,6 +18,7 @@ import {
 } from "./platform";
 import { ModelControls } from "./Connections";
 import QuestionRecorder from "./QuestionRecorder";
+import { ReplicaStage, useAvatarEngine } from "./AvatarEngine";
 
 export default function Delegate({
   profile,
@@ -36,6 +37,8 @@ export default function Delegate({
   setConfig: (c: ModelConfig) => void;
   reportBusy: (busy: boolean) => void;
 }) {
+  const video = useAvatarEngine();
+  const [output, setOutput] = useState<"video" | "audio">("video");
   const [sessionProfile, setSessionProfile] = useState<Profile | null>(null);
   const [sessionConfig, setSessionConfig] = useState<ModelConfig | null>(null);
   const represented = sessionProfile ?? profile;
@@ -76,6 +79,7 @@ export default function Delegate({
     controller.current?.abort();
     controller.current = null;
     stopVoice();
+    void video.interrupt().catch(() => {});
     setSpeaking(false);
     setBusy(false);
     reportBusy(false);
@@ -94,6 +98,24 @@ export default function Delegate({
       !selected.model.trim()
     ) {
       setError("Add your resume, role, provider, and exact model ID first.");
+      return;
+    }
+    if (
+      autoSpeak &&
+      output === "video" &&
+      (!video.connected || !video.videoReady)
+    ) {
+      setError(
+        "Connect your self-hosted video replica and wait for real frames before automatic speech.",
+      );
+      return;
+    }
+    if (
+      autoSpeak &&
+      (output === "audio" || video.voiceMode === "elevenlabs") &&
+      (!voiceId || !consent)
+    ) {
+      setError("Set up your own consented ElevenLabs voice first.");
       return;
     }
     if (messages.length >= 38) {
@@ -121,27 +143,39 @@ export default function Delegate({
     let speechFailed = false;
     const started = performance.now();
     function queueSpeech(text: string) {
-      if (!autoSpeak || !voiceId || !consent || !text.trim()) return;
-      speechChain = speechChain.then(async () => {
-        if (!active() || speechFailed) return;
-        setSpeaking(true);
-        try {
-          await playVoice(voiceId, text, () => {
+      if (!autoSpeak || !text.trim()) return;
+      for (const part of speechChunks(text))
+        speechChain = speechChain.then(async () => {
+          if (!active() || speechFailed) return;
+          setSpeaking(true);
+          try {
+            if (output === "video") {
+              const queuedAt = performance.now();
+              const result = await video.speak(part, voiceId);
+              if (active())
+                setAudioLatency(
+                  (previous) =>
+                    previous ??
+                    Math.round(queuedAt - started) + result.startedMs,
+                );
+            } else
+              await playVoice(voiceId, part, () => {
+                if (active())
+                  setAudioLatency(
+                    (previous) =>
+                      previous ?? Math.round(performance.now() - started),
+                  );
+              });
+          } catch (e) {
+            speechFailed = true;
             if (active())
-              setAudioLatency(
-                (prev) => prev ?? Math.round(performance.now() - started),
+              setError(
+                e instanceof Error
+                  ? e.message
+                  : "Speech failed. Text answers remain available.",
               );
-          });
-        } catch (e) {
-          speechFailed = true;
-          if (active())
-            setError(
-              e instanceof Error
-                ? e.message
-                : "Speech failed. Text answers remain available.",
-            );
-        }
-      });
+          }
+        });
     }
     try {
       const result = await generateText(
@@ -192,14 +226,24 @@ export default function Delegate({
     }
   }
   async function speak(text: string) {
-    if (!consent || !voiceId || !agreed) return;
+    if (!agreed) return;
+    if (output === "audio" && (!consent || !voiceId)) return;
     setSpeaking(true);
     setError("");
     const current = ++round.current;
     try {
-      await playVoice(voiceId, text, (ms) => {
-        if (current === round.current) setAudioLatency(ms);
-      });
+      for (const part of speechChunks(text)) {
+        if (current !== round.current) return;
+        if (output === "video") {
+          const result = await video.speak(part, voiceId);
+          if (current === round.current)
+            setAudioLatency((previous) => previous ?? result.startedMs);
+        } else
+          await playVoice(voiceId, part, (ms) => {
+            if (current === round.current)
+              setAudioLatency((previous) => previous ?? ms);
+          });
+      }
     } catch (e) {
       if (alive.current && current === round.current)
         setError(e instanceof Error ? e.message : "Speech failed.");
@@ -254,6 +298,11 @@ export default function Delegate({
       </div>
       <div className="delegate-grid">
         <div>
+          {output === "video" && (
+            <section className="card delegate-video">
+              <ReplicaStage />
+            </section>
+          )}
           <section className="card delegate-config">
             <div className="card-heading">
               <span className="step-icon">
@@ -291,15 +340,36 @@ export default function Delegate({
               I approve sending my resume, approved facts, and this conversation
               to the selected provider.
             </label>
+            <label className="delegate-output-label">
+              Answer output
+              <select
+                aria-label="Answer output"
+                value={output}
+                disabled={busy || speaking}
+                onChange={(event) =>
+                  setOutput(event.target.value as "video" | "audio")
+                }
+              >
+                <option value="video">My self-hosted video replica</option>
+                <option value="audio">Audio only · ElevenLabs</option>
+              </select>
+            </label>
             <label className="check-label">
               <input
                 type="checkbox"
                 checked={autoSpeak}
-                disabled={!voiceId || !consent || busy}
+                disabled={
+                  busy || (output === "audio" && (!voiceId || !consent))
+                }
                 onChange={(e) => setAutoSpeak(e.target.checked)}
               />
-              Speak answers automatically in my consented voice. Answer text is
-              sent to ElevenLabs. Audio starts sentence by sentence.
+              Speak answers automatically in my consented voice.{" "}
+              {output === "video"
+                ? video.voiceMode === "local"
+                  ? "Speech and video are generated by my local engine."
+                  : "ElevenLabs speech drives my local video replica."
+                : "Answer text is sent to ElevenLabs."}{" "}
+              Audio starts sentence by sentence.
             </label>
             <p className="inline-hint">
               A model can still make mistakes. Review approved facts and
@@ -352,15 +422,21 @@ export default function Delegate({
                         : `${represented.name || "Candidate"}’s AI representative`}
                     </strong>
                     <p>{m.content}</p>
-                    {m.role === "candidate" && voiceId && (
-                      <button
-                        className="text-button"
-                        disabled={busy || speaking || !consent || !agreed}
-                        onClick={() => void speak(m.content)}
-                      >
-                        <Volume2 size={12} /> Speak answer
-                      </button>
-                    )}
+                    {m.role === "candidate" &&
+                      (voiceId || output === "video") && (
+                        <button
+                          className="text-button"
+                          disabled={
+                            busy ||
+                            speaking ||
+                            !agreed ||
+                            (output === "audio" && !consent)
+                          }
+                          onClick={() => void speak(m.content)}
+                        >
+                          <Volume2 size={12} /> Speak answer
+                        </button>
+                      )}
                   </div>
                 </article>
               ))}
@@ -482,23 +558,27 @@ export default function Delegate({
                 </dd>
               </div>
               <div>
-                <dt>First audible playback</dt>
+                <dt>
+                  {output === "video"
+                    ? "Renderer speech start"
+                    : "First audible playback"}
+                </dt>
                 <dd>{audioLatency === null ? "—" : `${audioLatency} ms`}</dd>
               </div>
             </dl>
             <p>
-              Streaming model output + sentence-level ElevenLabs Flash speech.
-              Actual latency depends on your model, provider, network, and audio
-              playback.
+              {output === "video"
+                ? "Local video speech state is polled every 200 ms; this is not a speaker-device latency measurement."
+                : "Streaming model output + sentence-level ElevenLabs Flash speech. Actual latency depends on provider, network, and playback."}
             </p>
           </section>
           <div className="disclosure">
             <ShieldCheck size={17} />
             <p>
               <strong>A representative, with boundaries.</strong>Type a question
-              or record it with consent. This room does not join external calls,
-              create a virtual camera, animate a photo, or route audio into
-              another interview service.
+              or record it with consent. Your self-hosted engine animates your
+              prepared video. Third-party call integration and virtual devices
+              are separate from this video room.
             </p>
           </div>
           <button

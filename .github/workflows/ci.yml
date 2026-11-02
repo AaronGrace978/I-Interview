@@ -43,3 +43,13 @@ jobs:
       - run: npx electron-builder --dir --publish never -c.mac.notarize=false
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+  avatar-gateway:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.23"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: uv sync --directory avatar-engine --frozen --group dev
+      - run: avatar-engine/.venv/bin/python -m pytest avatar-engine/tests

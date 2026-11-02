@@ -15,6 +15,24 @@ export type Feedback = {
   strengths: string[];
   improvements: string[];
 };
+
+export function speechChunks(text: string, limit = 1500): string[] {
+  const chunks: string[] = [];
+  let remaining = text.trim();
+  while (remaining) {
+    if (remaining.length <= limit) {
+      chunks.push(remaining);
+      break;
+    }
+    const space = remaining.lastIndexOf(" ", limit);
+    let cut = space > limit / 2 ? space : limit;
+    const last = remaining.charCodeAt(cut - 1);
+    if (last >= 0xd800 && last <= 0xdbff) cut--;
+    chunks.push(remaining.slice(0, cut).trim());
+    remaining = remaining.slice(cut).trim();
+  }
+  return chunks;
+}
 export const feedbackSchema = z.object({
   summary: z.string().min(1).max(2000),
   strengths: z.array(z.string().max(1000)).min(1).max(5),

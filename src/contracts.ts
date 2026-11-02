@@ -1,5 +1,12 @@
 import { z } from "zod";
 import { profileSchema } from "./domain.js";
+import type {
+  AvatarStatus,
+  AvatarJob,
+  AvatarAnswer,
+  AvatarSpeech,
+  GpuStatus,
+} from "./avatar-contracts.js";
 
 export const providerSchema = z.enum([
   "openai",
@@ -23,6 +30,7 @@ export const keyProviderSchema = z.enum([
   "xai",
   "ollama",
   "elevenlabs",
+  "avatar_engine",
 ]);
 export type KeyProvider = z.infer<typeof keyProviderSchema>;
 export const requestSchema = z.object({
@@ -65,6 +73,19 @@ export type UpdateStatus = {
   percent?: number;
 };
 export interface DesktopBridge {
+  avatarStatus(): Promise<AvatarStatus>;
+  avatarGpu(): Promise<GpuStatus>;
+  avatarPrepare(avatarId: string, consent: boolean): Promise<AvatarJob | null>;
+  avatarJob(id: string): Promise<AvatarJob>;
+  avatarImportVoice(consent: boolean): Promise<boolean>;
+  avatarOffer(
+    avatarId: string,
+    sdp: string,
+    consent: boolean,
+  ): Promise<AvatarAnswer>;
+  avatarSpeak(request: AvatarSpeech): Promise<{ startedMs: number }>;
+  avatarInterrupt(): Promise<void>;
+  avatarStop(): Promise<void>;
   credentialStatus(): Promise<Partial<Record<KeyProvider, boolean>>>;
   saveCredential(provider: KeyProvider, key: string): Promise<void>;
   deleteCredential(provider: KeyProvider): Promise<void>;

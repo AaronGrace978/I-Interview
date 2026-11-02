@@ -22,6 +22,7 @@ import {
   Upload,
   UserRound,
   Volume2,
+  Video,
   X,
 } from "lucide-react";
 import {
@@ -48,12 +49,14 @@ import {
 } from "./platform";
 import { ProviderConnections, ModelControls, Updates } from "./Connections";
 import Delegate from "./Delegate";
+import VideoReplica, { useAvatarEngine } from "./AvatarEngine";
 import type { KeyProvider } from "./contracts";
 
-type Tab = "studio" | "delegate" | "practice" | "settings";
+type Tab = "studio" | "replica" | "delegate" | "practice" | "settings";
 const initialProfile: Profile = { name: "", role: "", resume: "" };
 
 export default function App() {
+  const avatarEngine = useAvatarEngine();
   const [workspaceEpoch, setWorkspaceEpoch] = useState(0);
   const [tab, setTab] = useState<Tab>("studio");
   const [profile, setProfile] = useState<Profile>(initialProfile);
@@ -222,6 +225,7 @@ export default function App() {
     stopVoice();
     setSpeaking(false);
     if (portraitRef.current) URL.revokeObjectURL(portraitRef.current);
+    void avatarEngine.disconnect();
     setWorkspaceEpoch((n) => n + 1);
     portraitRef.current = "";
     setPortrait("");
@@ -269,6 +273,13 @@ export default function App() {
           >
             <LayoutDashboard size={18} />
             Identity studio<span className="nav-pill">NEW</span>
+          </button>
+          <button
+            className={tab === "replica" ? "nav-item active" : "nav-item"}
+            onClick={() => setTab("replica")}
+          >
+            <Video size={18} />
+            Video replica<span className="nav-pill">LOCAL</span>
           </button>
           <button
             className={tab === "delegate" ? "nav-item active" : "nav-item"}
@@ -325,11 +336,13 @@ export default function App() {
             <strong>
               {tab === "studio"
                 ? "Identity studio"
-                : tab === "delegate"
-                  ? "Interview delegate"
-                  : tab === "practice"
-                    ? "Practice room"
-                    : "Connections"}
+                : tab === "replica"
+                  ? "Video replica"
+                  : tab === "delegate"
+                    ? "Interview delegate"
+                    : tab === "practice"
+                      ? "Practice room"
+                      : "Connections"}
             </strong>
           </span>
           <div className="topbar-right">
@@ -372,6 +385,9 @@ export default function App() {
               {busy}…
             </div>
           )}
+          <div hidden={tab !== "replica"}>
+            <VideoReplica />
+          </div>
           <div hidden={tab !== "delegate"}>
             <Delegate
               key={workspaceEpoch}
@@ -521,11 +537,11 @@ export default function App() {
                           {steps[1] ? <Check size={15} /> : "02"}
                         </span>
                       </div>
-                      <h2>A face to your story</h2>
+                      <h2>Your identity reference</h2>
                       <p>
                         Add your photo for your
                         <br />
-                        personal AI representative.
+                        profile. Set up moving video in Video replica.
                       </p>
                       <label className="secondary-button file-button">
                         <Plus size={15} />
@@ -680,7 +696,7 @@ export default function App() {
                   <ShieldCheck size={13} /> Built around your privacy
                 </span>
                 <span>YOUR AMBITION. AMPLIFIED.</span>
-                <span>I / Interview · v0.1</span>
+                <span>I / Interview · v0.2 development</span>
               </footer>
             </>
           )}
@@ -1030,8 +1046,9 @@ export default function App() {
                   )}
                   <p className="inline-hint">
                     The delegate can answer and speak on your behalf in its
-                    interview room. This release uses a static portrait;
-                    external call integrations and lip sync are not included.
+                    interview room. Use Video replica for the self-hosted
+                    moving-face pipeline; this panel manages the optional
+                    ElevenLabs voice.
                   </p>
                 </section>
               </div>
@@ -1046,8 +1063,10 @@ export default function App() {
                     session to keep it. Provider-stored voices persist
                     separately: delete a created voice here before clearing, or
                     manage it in ElevenLabs. AI delegation and coaching send
-                    your resume and session only after you opt in. No analytics
-                    or automatic recording.
+                    your resume and session only after you opt in. Prepared
+                    video caches and local voice references persist on your
+                    engine machine; clearing this workspace does not delete
+                    them. No analytics or automatic recording.
                   </p>
                   <button
                     className="secondary-button"
