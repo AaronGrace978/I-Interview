@@ -3,6 +3,7 @@ import {
   ArrowDownToLine,
   ArrowRight,
   AudioLines,
+  BookOpen,
   Check,
   ChevronRight,
   CircleHelp,
@@ -49,10 +50,19 @@ import {
 } from "./platform";
 import { ProviderConnections, ModelControls, Updates } from "./Connections";
 import Delegate from "./Delegate";
+import Guide from "./Guide";
 import VideoReplica, { useAvatarEngine } from "./AvatarEngine";
 import type { KeyProvider } from "./contracts";
 
-type Tab = "studio" | "replica" | "delegate" | "practice" | "settings";
+type Tab = "studio" | "replica" | "delegate" | "practice" | "settings" | "guide";
+const tabTitle: Record<Tab, string> = {
+  studio: "Identity studio",
+  replica: "Video replica",
+  delegate: "Interview delegate",
+  practice: "Practice room",
+  settings: "Connections",
+  guide: "How to get started",
+};
 const initialProfile: Profile = { name: "", role: "", resume: "" };
 
 export default function App() {
@@ -302,6 +312,13 @@ export default function App() {
             <Settings2 size={18} />
             Connections
           </button>
+          <button
+            className={tab === "guide" ? "nav-item active" : "nav-item"}
+            onClick={() => setTab("guide")}
+          >
+            <BookOpen size={18} />
+            How to get started
+          </button>
         </nav>
         <div className="sidebar-bottom">
           <div className="privacy-card">
@@ -333,17 +350,7 @@ export default function App() {
         <header className="topbar">
           <span>
             Workspace <ChevronRight size={13} />{" "}
-            <strong>
-              {tab === "studio"
-                ? "Identity studio"
-                : tab === "replica"
-                  ? "Video replica"
-                  : tab === "delegate"
-                    ? "Interview delegate"
-                    : tab === "practice"
-                      ? "Practice room"
-                      : "Connections"}
-            </strong>
+            <strong>{tabTitle[tab]}</strong>
           </span>
           <div className="topbar-right">
             <span className="private-status">
@@ -352,8 +359,8 @@ export default function App() {
             </span>
             <button
               className="icon-button"
-              aria-label="Help and privacy"
-              onClick={() => setTab("settings")}
+              aria-label="How to get started"
+              onClick={() => setTab("guide")}
             >
               <CircleHelp size={18} />
             </button>
@@ -934,6 +941,7 @@ export default function App() {
               )}
             </>
           )}
+          {tab === "guide" && <Guide onOpen={setTab} />}
           {tab === "settings" && (
             <>
               <div className="page-heading">

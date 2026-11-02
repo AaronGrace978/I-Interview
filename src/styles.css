@@ -2131,3 +2131,63 @@ select:focus-visible {
     padding: 20px;
   }
 }
+
+.guide-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 920px;
+}
+.guide-card h2,
+.guide-card h3 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  color: #283c30;
+}
+.guide-card h2 {
+  font-size: 28px;
+  margin: 0 0 8px;
+}
+.guide-card h3 {
+  font-size: 18px;
+  margin: 18px 0 6px;
+}
+.guide-card p,
+.guide-card li {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #3d4a40;
+}
+.guide-card ol,
+.guide-card ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.guide-card li {
+  margin: 6px 0;
+}
+.guide-card code,
+.guide-code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+}
+.guide-card code {
+  background: #eef2ea;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.guide-code {
+  margin: 12px 0 0;
+  padding: 14px 16px;
+  background: #f4f6f0;
+  border-radius: 10px;
+  color: #283c30;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+.guide-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}

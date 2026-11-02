@@ -45,8 +45,20 @@ def main():
     configure_private_web(web, Settings.load().token)
     vendor = Path(os.environ["INTERVIEW_LIVETALKING_ROOT"]).resolve()
     os.chdir(vendor)
-    sys.path.insert(0, str(vendor))
+    # LiveTalking's utils directory has no __init__.py, and MuseTalk ships a
+    # utils.py on the same import path. A real package in front keeps
+    # `import utils` on LiveTalking while MuseTalk can still import face_detection.
+    state = Path(os.environ.get("INTERVIEW_AVATAR_STATE", vendor.parent))
+    bridge = state / "import-bridge"
+    package = bridge / "utils"
+    package.mkdir(parents=True, exist_ok=True)
+    (package / "__init__.py").write_text(
+        "__path__.append(" + repr(os.fspath(vendor / "utils")) + ")\n",
+        encoding="utf-8",
+    )
     sys.path.insert(0, str(vendor / "avatars/musetalk/utils"))
+    sys.path.insert(0, str(vendor))
+    sys.path.insert(0, str(bridge))
     # Upstream app.py sets the multiprocessing start method itself.
     runpy.run_path(str(vendor / "app.py"), run_name="__main__")
 

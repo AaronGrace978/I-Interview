@@ -42,7 +42,9 @@ class Settings:
         vendor = Path(
             os.environ.get("INTERVIEW_LIVETALKING_ROOT", state / "LiveTalking")
         ).resolve()
+        # absolute(), not resolve(): the venv interpreter is a symlink to system
+        # Python, and following it drops the virtual environment.
         video_python = Path(
             os.environ.get("INTERVIEW_VIDEO_PYTHON", state / "video-env/bin/python")
-        ).resolve()
+        ).absolute()
         return cls(state, vendor, video_python, token)
