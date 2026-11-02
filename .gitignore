@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+src-tauri/target/
+dist-electron/
+release/
+.env*
+!.env.example
+*.log

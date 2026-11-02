@@ -1,0 +1,55 @@
+name: Build signed release draft
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag matching package.json, for example v0.1.0
+        required: true
+        type: string
+permissions:
+  contents: write
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+    runs-on: ${{ matrix.os }}
+    environment: release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Require matching version and signing credentials
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          CERT: ${{ matrix.platform == 'windows' && secrets.WINDOWS_CSC_LINK || secrets.MAC_CSC_LINK }}
+          CERT_PASSWORD: ${{ matrix.platform == 'windows' && secrets.WINDOWS_CSC_KEY_PASSWORD || secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TARGET: ${{ matrix.platform }}
+        run: |
+          node -e 'const p=require("./package.json"); if(process.env.RELEASE_TAG!==`v${p.version}`) throw new Error("Tag must match package version"); for(const k of ["CERT","CERT_PASSWORD",...(process.env.TARGET==="macos"?["APPLE_ID","APPLE_APP_SPECIFIC_PASSWORD","APPLE_TEAM_ID"]:[])]) if(!process.env[k]) throw new Error(`Missing signing requirement: ${k}`)'
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: Package, sign, and upload to a draft release
+        run: npx electron-builder --publish always -c.forceCodeSigning=true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ matrix.platform == 'windows' && secrets.WINDOWS_CSC_LINK || secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ matrix.platform == 'windows' && secrets.WINDOWS_CSC_KEY_PASSWORD || secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "true"

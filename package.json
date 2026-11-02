@@ -1,0 +1,101 @@
+{
+  "name": "i-interview",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.electron.json && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "desktop:dev": "npm run build:desktop && concurrently -k \"npm:dev\" \"wait-on http://127.0.0.1:1420 && npm run desktop:launch\"",
+    "build:desktop": "tsc -p tsconfig.electron.json",
+    "desktop:launch": "node scripts/launch.mjs",
+    "desktop:package": "npm run build && electron-builder --publish never",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.electron.json",
+    "test:desktop": "playwright test --config playwright.desktop.config.ts",
+    "format": "prettier --write src electron tests scripts *.ts *.json .github/workflows/*.yml README.md SECURITY.md",
+    "format:check": "prettier --check src electron tests scripts *.ts *.json .github/workflows/*.yml README.md SECURITY.md"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11",
+    "lucide-react": "^0.468.0",
+    "pdfjs-dist": "^6.5.438",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "concurrently": "^10.0.6",
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0",
+    "prettier": "^3.9.10",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.1",
+    "vitest": "^3.2.4",
+    "wait-on": "^9.5.1"
+  },
+  "description": "A disclosed AI interview delegate, built around your approved experience.",
+  "author": "AaronGrace978",
+  "license": "UNLICENSED",
+  "main": "dist-electron/electron/main.js",
+  "build": {
+    "appId": "com.iinterview.desktop",
+    "productName": "I Interview",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "AaronGrace978",
+        "repo": "I-Interview",
+        "releaseType": "draft"
+      }
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "hardenedRuntime": true,
+      "category": "public.app-category.productivity",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Record an interviewer\u2019s question only with their consent, then transcribe it for your disclosed AI representative."
+      },
+      "notarize": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "verifyUpdateCodeSignature": true,
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Office"
+    },
+    "icon": "build/icon.png"
+  }
+}
